@@ -4,6 +4,18 @@
 import axios, { AxiosInstance } from 'axios';
 import { supabase } from './supabaseClient';
 
+// Prevents multiple simultaneous 401 handlers from racing and triggering
+// sign-out/redirect more than once.
+let isHandlingUnauthorized = false;
+
+// Public routes where we should NOT force a redirect to login
+const PUBLIC_PATHS = [
+    '/login',
+    '/signup',
+    '/forgot-password',
+    '/reset-password',
+];
+
 // Backend API base URL
 const API_BASE_URL =
     import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
@@ -85,11 +97,30 @@ class ApiClient {
             (response) => response,
             async (error) => {
                 if (error.response?.status === 401) {
-                    // Clear session and redirect to login
-                    // Avoid infinite redirect loop if already on login page
-                    if (!window.location.pathname.includes('/login')) {
-                        await supabase.auth.signOut();
-                        const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                    const pathname = window.location.pathname || '/';
+
+                    // If we're already on a public/auth page (login, signup, reset, etc.)
+                    // don't yank the user away mid-flow.
+                    if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+                        return Promise.reject(error);
+                    }
+
+                    // Deduplicate concurrent 401 handlers to avoid multiple sign-outs / redirects
+                    if (!isHandlingUnauthorized) {
+                        isHandlingUnauthorized = true;
+                        try {
+                            await supabase.auth.signOut();
+                        } catch (e) {
+                            // Log but continue to redirect; signing out isn't critical here
+                            console.error(
+                                'Error signing out on 401 handler',
+                                e
+                            );
+                        }
+
+                        const returnUrl = encodeURIComponent(
+                            pathname + window.location.search
+                        );
                         window.location.href = `/login?returnUrl=${returnUrl}`;
                     }
                 }
