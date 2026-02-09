@@ -70,7 +70,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       try {
         const decoded = rawReturn ? decodeURIComponent(rawReturn) : null;
         // Protect against open redirects by only allowing internal paths
-        if (decoded && decoded.startsWith('/')) {
+        // More strict validation to prevent protocol-relative URLs and other bypasses
+        if (decoded && 
+            decoded.startsWith('/') && 
+            !decoded.startsWith('//') && 
+            !decoded.includes('\\') &&
+            !decoded.includes('..') &&
+            !decoded.includes('%') &&
+            /^[\/a-zA-Z0-9\-_?=&]+$/.test(decoded)) {
           navigate(decoded, { replace: true });
         } else {
           navigate('/', { replace: true });

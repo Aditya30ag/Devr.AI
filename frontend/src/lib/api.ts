@@ -122,6 +122,12 @@ class ApiClient {
                             pathname + window.location.search
                         );
                         window.location.href = `/login?returnUrl=${returnUrl}`;
+
+                        // Reset the flag after a short delay to prevent immediate re-triggering
+                        // but allow future 401 handling
+                        setTimeout(() => {
+                            isHandlingUnauthorized = false;
+                        }, 1000);
                     }
                 }
                 return Promise.reject(error);
